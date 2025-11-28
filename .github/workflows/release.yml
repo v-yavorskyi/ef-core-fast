@@ -24,13 +24,13 @@ jobs:
         run: dotnet restore
 
       - name: Build library (Release)
-        run: dotnet build --configuration Release --no-restore
+        run: dotnet build ./EfCore.FastExtensions.SqlServer/EfCore.FastExtensions.SqlServer.csproj --configuration Release --no-restore
 
       - name: Pack NuGet from tag version
         run: |
           VERSION=${GITHUB_REF#refs/tags/v}
           echo "Packing version: $VERSION"
-          dotnet pack src/EfCore.FastExtensions.SqlServer/EfCore.FastExtensions.SqlServer.csproj --configuration Release --no-build /p:PackageVersion=$VERSION /p:Version=$VERSION -o ./nupkg
+          dotnet pack ./EfCore.FastExtensions.SqlServer/EfCore.FastExtensions.SqlServer.csproj --configuration Release --no-build /p:PackageVersion=$VERSION /p:Version=$VERSION -o ./nupkg
 
       - name: Upload NuGet package artifact
         uses: actions/upload-artifact@v4

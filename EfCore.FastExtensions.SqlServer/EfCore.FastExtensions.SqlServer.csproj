@@ -10,7 +10,7 @@
 	<Authors>Vitalii Y</Authors>
 	<Company>EfCore.FastExtensions</Company>
 	<Description>Execute EFCore CRUD operation with JOIN query translation for SQL databases</Description>
-	<RepoUrl></RepoUrl>
+	<RepoUrl>https://github.com/v-yavorskyi/ef-core-fast</RepoUrl>
 	<RepositoryType>git</RepositoryType>
 	<PackageTags>EFCore;SQL;JoinUpdate;JoinDelete;ExecuteUpdate;ExecuteDelete</PackageTags>
 	<PackageReadmeFile>README.md</PackageReadmeFile>
