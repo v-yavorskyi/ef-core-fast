@@ -33,7 +33,4 @@ jobs:
           dotnet pack ./EfCore.FastExtensions.SqlServer/EfCore.FastExtensions.SqlServer.csproj --configuration Release --no-build /p:PackageVersion=$VERSION /p:Version=$VERSION -o ./nupkg
           
       - name: Publish to NuGet.org
-        run: dotnet nuget push ./nupkg/*.nupkg \
-              --api-key ${{ secrets.NUGET_API_KEY }} \
-              --source "https://api.nuget.org" \
-              --skip-duplicate
+        run: dotnet nuget push "./nupkg/*.nupkg" --api-key "${{ secrets.NUGET_API_KEY }}" -s https://api.nuget.org/v3/index.json --skip-duplicate
