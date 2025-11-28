@@ -1,4 +1,4 @@
-name: CI – Pack NuGet
+name: CI – Pack NuGet EfCore Extension Package
 
 on:
   push:
