@@ -1,0 +1,39 @@
+name: CI – Pack NuGet
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build-and-pack:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 6.0.x
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build library (Release)
+        run: dotnet build --configuration Release --no-restore
+
+      - name: Pack NuGet from tag version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "Packing version: $VERSION"
+          dotnet pack src/EfCore.FastExtensions.SqlServer/EfCore.FastExtensions.SqlServer.csproj --configuration Release --no-build /p:PackageVersion=$VERSION /p:Version=$VERSION -o ./nupkg
+
+      - name: Upload NuGet package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-package
+          path: ./nupkg/*.nupkg
