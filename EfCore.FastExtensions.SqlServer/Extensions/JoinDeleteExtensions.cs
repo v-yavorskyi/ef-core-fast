@@ -1,6 +1,7 @@
-﻿using EfCore.FastExtensions.SqlServer.Accessors;
+using EfCore.FastExtensions.SqlServer.Accessors;
 using EfCore.FastExtensions.SqlServer.Builders;
 using Microsoft.EntityFrameworkCore;
+using System.Collections.Generic;
 using System.Linq.Expressions;
 
 namespace EfCore.FastExtensions.SqlServer.Extensions;
@@ -13,22 +14,25 @@ public static class JoinDeleteExtensions
     where TEntity : class
     {
         var db = DbContextAccessor.GetDbContextFromQuery(query);
-        var sql = GetDeleteSql(query, db);
+        var sql = GetDeleteSql(query, db, out var parameters);
 
-        return await db.Database.ExecuteSqlRawAsync(sql, cancellationToken);
+        return await db.Database.ExecuteSqlRawAsync(sql, parameters, cancellationToken);
     }
 
 
     private static string GetDeleteSql<TEntity>(
             IQueryable<TEntity> query,
-            DbContext db)
+            DbContext db,
+            out object[] parameters)
             where TEntity : class
     {
         // 1. Extract WHERE expression (same as update)
-        var whereLambda = WhereClauseBuilder.ExtractWhereExpression(query.Expression);
-        var whereExpressions = whereLambda != null
-            ? new[] { whereLambda.Body }                 // Expression, not lambda wrapper
-            : Array.Empty<Expression>();
+        var whereLambdas = WhereClauseBuilder.ExtractWhereExpressions(query.Expression);
+        var whereExpressions = whereLambdas.Any()
+            ? whereLambdas.Select(lambda => lambda.Body).ToList()
+            : new List<Expression>();
+
+        var parameterBag = new SqlParameterAccumulator();
 
         // 2. Build join tree (based only on WHERE expressions)
         var joinRoot = JoinTreeBuilder.BuildJoinTree<TEntity>(db, whereExpressions!);
@@ -37,14 +41,20 @@ public static class JoinDeleteExtensions
         var fromClause = FromClauseBuilder.BuildFromClause(joinRoot);
 
         // 4. Build WHERE clause
-        var whereClause = WhereClauseBuilder.BuildWhereClause(query, joinRoot, db);
+        var whereClause = WhereClauseBuilder.BuildWhereClause(query, joinRoot, db, parameterBag);
 
         var rootAlias = joinRoot.TableAlias;
+
+        var whereSql = string.IsNullOrWhiteSpace(whereClause)
+            ? string.Empty
+            : $"WHERE {whereClause}";
+
+        parameters = parameterBag.ToArray();
 
         return $@"
 DELETE {rootAlias}
 FROM {fromClause}
-WHERE {whereClause};
+{whereSql};
 ".Trim();
     }
 
