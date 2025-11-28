@@ -1,0 +1,28 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+	<PackageId>EfCore.JoinExtensions</PackageId>
+	<Version>1.0.0</Version>
+	<Authors>Vitalii Y</Authors>
+	<Company>EfCore.FastExtensions</Company>
+	<Description>Execute EFCore CRUD operation with JOIN query translation for SQL databases</Description>
+	<RepoUrl></RepoUrl>
+	<RepositoryType>git</RepositoryType>
+	<PackageTags>EFCore;SQL;JoinUpdate;JoinDelete;ExecuteUpdate;ExecuteDelete</PackageTags>
+	<PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\EfCore.FastExtensions\EfCore.FastExtensions.csproj" />
+  </ItemGroup>
+
+</Project>
