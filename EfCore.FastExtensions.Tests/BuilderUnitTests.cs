@@ -2,6 +2,7 @@ using EfCore.FastExtensions.SqlServer.Builders;
 using EfCore.FastExtensions.Tests.Models;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using System.Linq.Expressions;
 
 namespace EfCore.FastExtensions.Tests;
 
@@ -32,8 +33,8 @@ public class BuilderUnitTests
         var predicates = WhereClauseBuilder.ExtractWhereExpressions(query.Expression);
 
         Assert.Collection(predicates,
-            first => Assert.Equal("u.Id > 0", first.Body.ToString()),
-            second => Assert.Equal("u.Region == \"South\"", second.Body.ToString()));
+            first => Assert.Equal("u.Id > 0", first.Body.ToString().Trim('(', ')')),
+            second => Assert.Equal("u.Region == \"South\"", second.Body.ToString().Trim('(', ')')));
     }
 
     [Fact]
