@@ -5,7 +5,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-	<PackageId>EfCore.FastExtensions</PackageId>
+	<PackageId>EfCore.FastExtensions.SqlServer</PackageId>
 	<Version>1.0.0</Version>
 	<Authors>Vitalii Y</Authors>
 	<Company></Company>
