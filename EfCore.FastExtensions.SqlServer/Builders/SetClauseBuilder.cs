@@ -61,7 +61,7 @@ internal static class SetClauseBuilder
                        ?? throw new InvalidOperationException(
                            $"Property '{propertyName}' is not mapped on entity '{root.EntityType.Name}'.");
 
-        var columnName = property.GetColumnBaseName();
+        var columnName = property.GetColumnName();
 
         return $"{root.TableAlias}.{columnName}";
     }
@@ -149,7 +149,7 @@ internal static class SetClauseBuilder
                        ?? throw new InvalidOperationException(
                            $"Property '{lastMember.Name}' is not mapped on entity '{node.EntityType.Name}'.");
 
-        var columnName = property.GetColumnBaseName();
+        var columnName = property.GetColumnName();
 
         return $"{node.TableAlias}.{columnName}";
     }
@@ -265,13 +265,13 @@ internal static class SetClauseBuilder
 
                 case nameof(string.Substring) when mc.Arguments.Count == 2:
                     // Substring(start, length) → SUBSTRING(col, start + 1, length)
-                    var start = TranslateExpression(mc.Arguments[0], root, db);
-                    var len = TranslateExpression(mc.Arguments[1], root, db);
+                    var start = TranslateExpression(mc.Arguments[0], root, db, parameters);
+                    var len = TranslateExpression(mc.Arguments[1], root, db, parameters);
                     return $"SUBSTRING({instanceSql}, ({start}) + 1, {len})";
 
                 case nameof(string.Substring) when mc.Arguments.Count == 1:
                     // Substring(start) → SUBSTRING(col, start + 1, LEN(col) - start)
-                    var s = TranslateExpression(mc.Arguments[0], root, db);
+                    var s = TranslateExpression(mc.Arguments[0], root, db, parameters);
                     return $"SUBSTRING({instanceSql}, ({s}) + 1, LEN({instanceSql}) - ({s}))";
             }
         }
@@ -279,7 +279,7 @@ internal static class SetClauseBuilder
         // Nullable.HasValue / Nullable.Value → translate as usual
         if (mc.Method.Name == "GetValueOrDefault" && mc.Object != null)
         {
-            return TranslateExpression(mc.Object, root, db);
+            return TranslateExpression(mc.Object, root, db, parameters);
         }
 
         throw new NotSupportedException(

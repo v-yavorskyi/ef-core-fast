@@ -1,5 +1,6 @@
 using EfCore.FastExtensions.SqlServer.Accessors;
 using EfCore.FastExtensions.SqlServer.Builders;
+using EfCore.FastExtensions.SqlServer.Models;
 using Microsoft.EntityFrameworkCore;
 using System.Collections.Generic;
 using System.Linq.Expressions;

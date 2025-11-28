@@ -101,14 +101,14 @@ internal sealed class JoinNode
             yield return childIsDependent
                 ? new JoinKey(
                     LeftAlias: thisAlias,
-                    LeftColumn: dep.GetColumnBaseName(),
+                    LeftColumn: dep.GetColumnName(),
                     RightAlias: parentAlias!,
-                    RightColumn: prin.GetColumnBaseName())
+                    RightColumn: prin.GetColumnName())
                 : new JoinKey(
                     LeftAlias: parentAlias!,
-                    LeftColumn: dep.GetColumnBaseName(),
+                    LeftColumn: dep.GetColumnName(),
                     RightAlias: thisAlias,
-                    RightColumn: prin.GetColumnBaseName());
+                    RightColumn: prin.GetColumnName());
         }
     }
 }

@@ -167,7 +167,7 @@ internal static class ExpressionSqlTranslator
                    ?? throw new InvalidOperationException(
                        $"Property '{last.Name}' not mapped on entity '{node.EntityType.Name}'");
 
-        var column = property.GetColumnBaseName();
+        var column = property.GetColumnName();
         return $"{node.TableAlias}.{column}";
     }
 

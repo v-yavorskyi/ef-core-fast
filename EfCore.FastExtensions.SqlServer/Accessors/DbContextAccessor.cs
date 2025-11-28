@@ -28,6 +28,9 @@ internal static class DbContextAccessor
 
         var queryCompiler = compilerField.GetValue(provider);
 
+        if (queryCompiler == null)
+            throw new InvalidOperationException("Cannot find _queryCompiler.");
+
         // Get QueryContextFactory
         var queryContextFactoryField = queryCompiler.GetType()
             .GetField("_queryContextFactory", BindingFlags.NonPublic | BindingFlags.Instance);
@@ -36,6 +39,9 @@ internal static class DbContextAccessor
             throw new InvalidOperationException("Cannot access _queryContextFactory.");
 
         var queryContextFactory = queryContextFactoryField.GetValue(queryCompiler);
+
+        if (queryContextFactory == null)
+            throw new InvalidOperationException("Cannot find _queryContextFactory.");
 
         // Get Dependencies -> CurrentContext
         var dependenciesProperty = queryContextFactory.GetType()
@@ -46,13 +52,16 @@ internal static class DbContextAccessor
 
         var dependencies = dependenciesProperty.GetValue(queryContextFactory);
 
+        if (dependencies == null)
+            throw new InvalidOperationException("Cannot find Dependencies from QueryContextFactory.");
+
         var currentContextProperty = dependencies.GetType()
             .GetProperty("CurrentContext", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
 
         if (currentContextProperty == null)
             throw new InvalidOperationException("Cannot get CurrentContext");
 
-        var currentContext2 = (ICurrentDbContext)currentContextProperty.GetValue(dependencies);
+        var currentContext2 = (ICurrentDbContext)currentContextProperty.GetValue(dependencies)!;
 
         return currentContext2.Context;
     }

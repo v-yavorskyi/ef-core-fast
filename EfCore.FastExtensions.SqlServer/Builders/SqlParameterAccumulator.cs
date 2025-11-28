@@ -20,5 +20,5 @@ internal sealed class SqlParameterAccumulator
         return $"{{{index}}}";
     }
 
-    public object[] ToArray() => _parameters.ToArray();
+    public object?[] ToArray() => _parameters.ToArray();
 }
