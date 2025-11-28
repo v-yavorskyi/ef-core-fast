@@ -5,10 +5,10 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-	<PackageId>EfCore.JoinExtensions</PackageId>
+	<PackageId>EfCore.FastExtensions</PackageId>
 	<Version>1.0.0</Version>
 	<Authors>Vitalii Y</Authors>
-	<Company>EfCore.FastExtensions</Company>
+	<Company></Company>
 	<Description>Execute EFCore CRUD operation with JOIN query translation for SQL databases</Description>
 	<RepoUrl>https://github.com/v-yavorskyi/ef-core-fast</RepoUrl>
 	<RepositoryType>git</RepositoryType>
