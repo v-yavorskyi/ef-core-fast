@@ -21,6 +21,7 @@ Extends Entity Framework Core with static IQueryable-level join-based execution 
 
 ```bash
 dotnet add package EfCore.JoinExtensions
+```
 
 ## Usage Examples
 ```
@@ -29,6 +30,14 @@ var deleted = await db.Users
     .ThenInclude(s => s.Country)
     .Where(u => u.State!.StateCode == "AB")
     .ExecuteDeleteJoinAsync(CancellationToken.None);
+
+var affected = await db.Users
+    .Include(x => x.State)
+    .ThenInclude(x => x.Country)
+    .Where(u => u.Id == 1 && u.State.Country.Id > 0)
+    .ExecuteUpdateJoinAsync(
+        x => x.SetProperty(p => p.Region, p => (p.State!.StateName.ToUpper()))
+    );
 ```
 
 ## 🤝 Contributing
