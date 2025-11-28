@@ -8,7 +8,7 @@ namespace EfCore.FastExtensions.Tests.Models
     {
         public int Id { get; set; }
         public int StateId { get; set; }
-        public string Region { get; set; }
+        public string? Region { get; set; }
         public State? State { get; set; }
     }
 }

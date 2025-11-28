@@ -1,6 +1,7 @@
-﻿using EfCore.FastExtensions.SqlServer.Models;
+using EfCore.FastExtensions.SqlServer.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
+using System.Collections.Generic;
 using System.Linq.Expressions;
 using System.Reflection;
 
@@ -9,24 +10,30 @@ namespace EfCore.FastExtensions.SqlServer.Builders;
 internal static class WhereClauseBuilder
 {
     /// <summary>
-    /// Extracts WHERE lambda expression from query (supports chaining, Include, Select, etc.)
+    /// Extracts all WHERE lambda expressions from a query (supports chaining, Include, Select, etc.)
     /// </summary>
-    public static LambdaExpression? ExtractWhereExpression(Expression expr)
+    public static IReadOnlyList<LambdaExpression> ExtractWhereExpressions(Expression expr)
     {
-        if (expr is MethodCallExpression mce)
-        {
-            // Detect .Where(...)
-            if (mce.Method.Name == nameof(Queryable.Where) && mce.Arguments.Count == 2)
-            {
-                var unary = (UnaryExpression)mce.Arguments[1];
-                return (LambdaExpression)unary.Operand;
-            }
+        var predicates = new List<LambdaExpression>();
+        CollectWhereExpressions(expr, predicates);
+        predicates.Reverse();
+        return predicates;
+    }
 
-            // Recursively search deeper
-            return ExtractWhereExpression(mce.Arguments[0]);
+    private static void CollectWhereExpressions(Expression expr, List<LambdaExpression> predicates)
+    {
+        if (expr is not MethodCallExpression mce)
+        {
+            return;
         }
 
-        return null;
+        if (mce.Method.Name == nameof(Queryable.Where) && mce.Arguments.Count == 2)
+        {
+            var unary = (UnaryExpression)mce.Arguments[1];
+            predicates.Add((LambdaExpression)unary.Operand);
+        }
+
+        CollectWhereExpressions(mce.Arguments[0], predicates);
     }
 
     /// <summary>
@@ -36,16 +43,18 @@ internal static class WhereClauseBuilder
     public static string BuildWhereClause<TEntity>(
         IQueryable<TEntity> query,
         JoinNode root,
-        DbContext db)
+        DbContext db,
+        SqlParameterAccumulator parameters)
         where TEntity : class
     {
-        var whereExpr = ExtractWhereExpression(query.Expression);
+        var whereExprs = ExtractWhereExpressions(query.Expression);
 
-        if (whereExpr == null)
+        if (!whereExprs.Any())
             return ""; // No WHERE clause in original query
 
         // WHERE body (e.g. p => p.Id == 10)
-        var sqlBody = TranslateExpression(whereExpr.Body, root, db);
+        var mergedBody = MergePredicates(whereExprs);
+        var sqlBody = TranslateExpression(mergedBody, root, db, parameters);
 
         return sqlBody;
     }
@@ -54,11 +63,30 @@ internal static class WhereClauseBuilder
     /// Reuses the same expression translator used by SET.
     /// This keeps aliasing and navigation resolution EXACTLY identical.
     /// </summary>
-    private static string TranslateExpression(Expression expr, JoinNode root, DbContext db)
+    private static string TranslateExpression(Expression expr, JoinNode root, DbContext db, SqlParameterAccumulator parameters)
     {
         // We simply delegate to your existing TranslateExpression implementation.
         // If your code is in SetClauseBuilder, call that method.
-        return ExpressionSqlTranslator.Translate(expr, root, db);
+        return ExpressionSqlTranslator.Translate(expr, root, db, parameters);
+    }
+
+    private static Expression MergePredicates(IReadOnlyList<LambdaExpression> predicates)
+    {
+        if (predicates.Count == 1)
+        {
+            return predicates[0].Body;
+        }
+
+        var primaryParameter = predicates[0].Parameters[0];
+        Expression combined = predicates[0].Body;
+
+        foreach (var predicate in predicates.Skip(1))
+        {
+            var rewritten = ParameterReplacer.Replace(predicate.Body, predicate.Parameters[0], primaryParameter);
+            combined = Expression.AndAlso(combined, rewritten);
+        }
+
+        return combined;
     }
 }
 
@@ -67,32 +95,33 @@ internal static class ExpressionSqlTranslator
     public static string Translate(
         Expression expr,
         JoinNode root,
-        DbContext db)
+        DbContext db,
+        SqlParameterAccumulator parameters)
     {
         switch (expr)
         {
             case MemberExpression me:
-                return TranslateMemberAccess(me, root);
+                return TranslateMemberAccess(me, root, parameters);
 
             case BinaryExpression be:
-                var left = Translate(be.Left, root, db);
+                var left = Translate(be.Left, root, db, parameters);
                 var op = GetSqlOperator(be.NodeType);
-                var right = Translate(be.Right, root, db);
+                var right = Translate(be.Right, root, db, parameters);
                 return $"{left} {op} {right}";
 
             case ConstantExpression ce:
-                return FormatConstant(ce.Value);
+                return FormatConstant(ce.Value, parameters);
 
             case UnaryExpression ue:
-                return TranslateUnary(ue, root, db);
+                return TranslateUnary(ue, root, db, parameters);
 
             case MethodCallExpression mc:
-                return TranslateMethodCall(mc, root, db);
+                return TranslateMethodCall(mc, root, db, parameters);
 
             case ConditionalExpression ce:
-                return $"CASE WHEN {Translate(ce.Test, root, db)} " +
-                       $"THEN {Translate(ce.IfTrue, root, db)} " +
-                       $"ELSE {Translate(ce.IfFalse, root, db)} END";
+                return $"CASE WHEN {Translate(ce.Test, root, db, parameters)} " +
+                       $"THEN {Translate(ce.IfTrue, root, db, parameters)} " +
+                       $"ELSE {Translate(ce.IfFalse, root, db, parameters)} END";
 
             case ParameterExpression:
                 return root.TableAlias;
@@ -106,7 +135,7 @@ internal static class ExpressionSqlTranslator
     // -------------------------------------------------------
     // 1. Member Access (properties)
     // -------------------------------------------------------
-    private static string TranslateMemberAccess(MemberExpression me, JoinNode root)
+    private static string TranslateMemberAccess(MemberExpression me, JoinNode root, SqlParameterAccumulator parameters)
     {
         var (rootParam, chain, last) = CollectMemberChain(me);
 
@@ -114,7 +143,7 @@ internal static class ExpressionSqlTranslator
         {
             // Captured variables (e.g. outside locals) become constants
             object? value = GetValueFromExpression(me);
-            return FormatConstant(value);
+            return FormatConstant(value, parameters);
         }
 
         // Navigate through join tree
@@ -138,7 +167,7 @@ internal static class ExpressionSqlTranslator
                    ?? throw new InvalidOperationException(
                        $"Property '{last.Name}' not mapped on entity '{node.EntityType.Name}'");
 
-        var column = property.GetColumnBaseName();
+        var column = property.GetColumnName();
         return $"{node.TableAlias}.{column}";
     }
 
@@ -195,37 +224,25 @@ internal static class ExpressionSqlTranslator
     // -------------------------------------------------------
     // 3. SQL Constants
     // -------------------------------------------------------
-    public static string FormatConstant(object? value) =>
-        value switch
-        {
-            null => "NULL",
-            string s => $"'{s.Replace("'", "''")}'",
-            char c => $"'{c}'",
-            bool b => b ? "1" : "0",
-            DateTime dt => $"'{dt:yyyy-MM-dd HH:mm:ss.fff}'",
-            DateTimeOffset dto => $"'{dto:yyyy-MM-dd HH:mm:ss.fff zzz}'",
-            Enum e => Convert.ToInt64(e).ToString(),
-            Guid g => $"'{g}'",
-            IFormattable f => f.ToString(null, System.Globalization.CultureInfo.InvariantCulture),
-            _ => $"'{value}'"
-        };
+    public static string FormatConstant(object? value, SqlParameterAccumulator parameters) =>
+        parameters.Add(value);
 
 
     // -------------------------------------------------------
     // 4. Unary Expressions (!, negation, casts)
     // -------------------------------------------------------
-    private static string TranslateUnary(UnaryExpression ue, JoinNode root, DbContext db)
+    private static string TranslateUnary(UnaryExpression ue, JoinNode root, DbContext db, SqlParameterAccumulator parameters)
     {
         return ue.NodeType switch
         {
             ExpressionType.Convert or ExpressionType.ConvertChecked =>
-                Translate(ue.Operand, root, db),
+                Translate(ue.Operand, root, db, parameters),
 
             ExpressionType.Negate or ExpressionType.NegateChecked =>
-                "-" + Translate(ue.Operand, root, db),
+                "-" + Translate(ue.Operand, root, db, parameters),
 
             ExpressionType.Not when ue.Operand.Type == typeof(bool) =>
-                $"(CASE WHEN {Translate(ue.Operand, root, db)} = 1 THEN 0 ELSE 1 END)",
+                $"(CASE WHEN {Translate(ue.Operand, root, db, parameters)} = 1 THEN 0 ELSE 1 END)",
 
             _ => throw new NotSupportedException($"Unary operator '{ue.NodeType}' not supported.")
         };
@@ -235,20 +252,20 @@ internal static class ExpressionSqlTranslator
     // -------------------------------------------------------
     // 5. Method Calls (Contains, StartsWith, ToUpper, etc.)
     // -------------------------------------------------------
-    private static string TranslateMethodCall(MethodCallExpression mc, JoinNode root, DbContext db)
+    private static string TranslateMethodCall(MethodCallExpression mc, JoinNode root, DbContext db, SqlParameterAccumulator parameters)
     {
         // string.Concat(...)
         if (mc.Method.DeclaringType == typeof(string) &&
             mc.Method.Name == nameof(string.Concat))
         {
-            var args = mc.Arguments.Select(a => Translate(a, root, db));
+            var args = mc.Arguments.Select(a => Translate(a, root, db, parameters));
             return string.Join(" + ", args); // SQL Server concatenation
         }
 
         // string methods
         if (mc.Method.DeclaringType == typeof(string))
         {
-            var instance = mc.Object != null ? Translate(mc.Object, root, db) : null;
+            var instance = mc.Object != null ? Translate(mc.Object, root, db, parameters) : null;
 
             return mc.Method.Name switch
             {
@@ -259,19 +276,19 @@ internal static class ExpressionSqlTranslator
                 nameof(string.TrimEnd) => $"RTRIM({instance})",
 
                 nameof(string.StartsWith) =>
-                    $"{instance} LIKE {Translate(mc.Arguments[0], root, db)} + '%' ",
+                    $"{instance} LIKE {Translate(mc.Arguments[0], root, db, parameters)} + '%' ",
 
                 nameof(string.EndsWith) =>
-                    $"{instance} LIKE '%' + {Translate(mc.Arguments[0], root, db)} ",
+                    $"{instance} LIKE '%' + {Translate(mc.Arguments[0], root, db, parameters)} ",
 
                 nameof(string.Contains) =>
-                    $"{instance} LIKE '%' + {Translate(mc.Arguments[0], root, db)} + '%'",
+                    $"{instance} LIKE '%' + {Translate(mc.Arguments[0], root, db, parameters)} + '%'",
 
                 nameof(string.Substring) when mc.Arguments.Count == 2 =>
-                    $"SUBSTRING({instance}, ({Translate(mc.Arguments[0], root, db)}) + 1, {Translate(mc.Arguments[1], root, db)})",
+                    $"SUBSTRING({instance}, ({Translate(mc.Arguments[0], root, db, parameters)}) + 1, {Translate(mc.Arguments[1], root, db, parameters)})",
 
                 nameof(string.Substring) when mc.Arguments.Count == 1 =>
-                    $"SUBSTRING({instance}, ({Translate(mc.Arguments[0], root, db)}) + 1, LEN({instance}) - ({Translate(mc.Arguments[0], root, db)}))",
+                    $"SUBSTRING({instance}, ({Translate(mc.Arguments[0], root, db, parameters)}) + 1, LEN({instance}) - ({Translate(mc.Arguments[0], root, db, parameters)}))",
 
                 _ => throw new NotSupportedException($"String method '{mc.Method.Name}' is not supported.")
             };
@@ -279,5 +296,32 @@ internal static class ExpressionSqlTranslator
 
         throw new NotSupportedException(
             $"Method call '{mc.Method.DeclaringType}.{mc.Method.Name}' not supported in SQL translation.");
+    }
+}
+
+internal sealed class ParameterReplacer : ExpressionVisitor
+{
+    private readonly ParameterExpression _source;
+    private readonly ParameterExpression _target;
+
+    private ParameterReplacer(ParameterExpression source, ParameterExpression target)
+    {
+        _source = source;
+        _target = target;
+    }
+
+    public static Expression Replace(Expression expression, ParameterExpression source, ParameterExpression target)
+    {
+        return new ParameterReplacer(source, target).Visit(expression)!;
+    }
+
+    protected override Expression VisitParameter(ParameterExpression node)
+    {
+        if (node == _source)
+        {
+            return _target;
+        }
+
+        return base.VisitParameter(node);
     }
 }
