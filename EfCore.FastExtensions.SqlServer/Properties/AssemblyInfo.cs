@@ -1,3 +1,3 @@
 using System.Runtime.CompilerServices;
 
-[assembly: InternalsVisibleTo("EfCore.FastExtensions.Tests")]
+[assembly: InternalsVisibleTo("EfCore.FastExtensions.SqlServer.Tests")]

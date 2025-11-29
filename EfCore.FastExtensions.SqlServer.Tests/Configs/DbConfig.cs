@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace EfCore.FastExtensions.Tests.Configs;
+namespace EfCore.FastExtensions.SqlServer.Tests.Configs;
 
 internal static class DbConfig
 {

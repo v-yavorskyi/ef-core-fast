@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace EfCore.FastExtensions.Tests.Models
+namespace EfCore.FastExtensions.SqlServer.Tests.Models
 {
     internal class State
     {

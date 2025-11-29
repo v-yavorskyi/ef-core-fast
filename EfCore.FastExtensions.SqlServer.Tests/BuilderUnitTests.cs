@@ -1,10 +1,10 @@
 using EfCore.FastExtensions.SqlServer.Builders;
-using EfCore.FastExtensions.Tests.Models;
+using EfCore.FastExtensions.SqlServer.Tests.Models;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using System.Linq.Expressions;
 
-namespace EfCore.FastExtensions.Tests;
+namespace EfCore.FastExtensions.SqlServer.Tests;
 
 public class BuilderUnitTests
 {

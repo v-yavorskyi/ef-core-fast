@@ -1,6 +1,6 @@
 ﻿using EfCore.FastExtensions.SqlServer.Extensions;
-using EfCore.FastExtensions.Tests.Configs;
-using EfCore.FastExtensions.Tests.Models;
+using EfCore.FastExtensions.SqlServer.Tests.Configs;
+using EfCore.FastExtensions.SqlServer.Tests.Models;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections;
@@ -12,8 +12,8 @@ using System.Threading.Tasks;
 using System.Xml.Linq;
 using Xunit;
 
-namespace EfCore.FastExtensions.Tests;
-public class JoinDeleteTests
+namespace EfCore.FastExtensions.SqlServer.Tests;
+public class JoinUpdateTests
 {
 
     class TestDb : DbContext
@@ -58,29 +58,34 @@ public class JoinDeleteTests
         return db;
     }
 
+
     [Fact]
-    public async Task ExecuteDelete_Deletes_Only_Matching_Rows()
+    public async Task ExecuteUpdate_Updates_Field_Correctly()
     {
+        // arrange
         var db = await CreateDbAsync();
         try
         {
             await GenerateTestDataAsync(db);
 
-            // Delete user whose StateCode == AB
-            var deleted = await db.Users
-                .Include(u => u.State)
-                .ThenInclude(s => s.Country)
-                .Where(u => u.State!.StateCode == "AB")
-                .ExecuteDeleteJoinAsync(CancellationToken.None);
+            // act
+            var affected = await db.Users
+                .Include(x => x.State)
+                .ThenInclude(x => x.Country)
+                .Where(u => u.Id == 1 && u.State.Country.Id > 0)
+                    .ExecuteUpdateJoinAsync(
+                        x => x.SetProperty(p => p.Region, p => (p.State!.StateName.ToUpper()))
+                    );
 
-            db.ChangeTracker.Clear();
+            db.ChangeTracker.Clear(); // caller explicitly chose this feature
 
-            var users = await db.Users.OrderBy(u => u.Id).ToListAsync();
 
-            // Expect: 1 user deleted
-            Assert.Equal(1, deleted);
-            Assert.Single(users);
-            Assert.Equal("Old2", users[0].Region); // the Florida user remains
+            // assert
+            var updated = await db.Users.Take(2).ToListAsync();
+            Assert.Equal(1, affected);
+            Assert.Equal("ALABAMA", updated[0].Region);
+            Assert.Equal("Old2", updated[1].Region);
+
         }
         finally
         {
@@ -88,65 +93,38 @@ public class JoinDeleteTests
             await db.DisposeAsync();
         }
     }
-
     [Fact]
-    public async Task ExecuteDelete_Uses_Navigations_From_Where_Clause()
+    public async Task ExecuteUpdate_Uses_Navigations_From_Where_Clause()
     {
+        // arrange
         var db = await CreateDbAsync();
-
         try
         {
             await GenerateTestDataAsync(db);
 
-            // Delete users whose Country.Code == "US"
-            var deleted = await db.Users
-                .Include(u => u.State)
-                .ThenInclude(s => s.Country)
-                .Where(u => u.State!.Country!.Code == "US")
-                .ExecuteDeleteJoinAsync(CancellationToken.None);
-
-            db.ChangeTracker.Clear();
-
-            var users = await db.Users.ToListAsync();
-
-            // Both users belong to Country=US → both deleted
-            Assert.Equal(2, deleted);
-            Assert.Empty(users);
-        }
-        finally
-        {
-            await db.Database.EnsureDeletedAsync();
-            await db.DisposeAsync();
-        }
-    }
-
-    [Fact]
-    public async Task ExecuteDelete_Where_Uses_Navigations_Not_In_Set()
-    {
-        var db = await CreateDbAsync();
-
-        try
-        {
-            await GenerateTestDataAsync(db);
-
-            // WHERE uses deep navigation:
-            //     u.State.Country.Name == "North America"
+            // We intentionally use a WHERE clause that references deep navigations:
+            // u.State.Country.Code == "US"
             //
-            // This ensures JOIN tree must detect navigations from WHERE only,
-            // exactly like UPDATE tests do.
+            // BUT the SET expression does NOT reference State or Country!
+            //
+            // This test ensures the join tree discovers navigations from WHERE, not only SET.
 
-            var deleted = await db.Users
-                .Where(u => u.State!.Country!.Name == "North America" &&
-                            u.State.StateCode == "FL")
-                .ExecuteDeleteJoinAsync();
+            var affected = await db.Users
+                .Include(u => u.State)
+                .ThenInclude(s => s.Country)
+                .Where(u => u.State!.Country!.Code == "US" && u.State.StateCode == "AB")
+                .ExecuteUpdateJoinAsync(builder =>
+                    builder.SetProperty(p => p.Region, p => "UPDATED")
+                );
 
             db.ChangeTracker.Clear();
 
+            // assert
             var users = await db.Users.OrderBy(u => u.Id).ToListAsync();
 
-            Assert.Equal(1, deleted);
-            Assert.Single(users);
-            Assert.Equal("Old1", users[0].Region);  // Alabama user remains
+            Assert.Equal(1, affected);               // only first user
+            Assert.Equal("UPDATED", users[0].Region); // AB (Alabama)
+            Assert.Equal("Old2", users[1].Region);    // FL untouched
         }
         finally
         {
