@@ -64,7 +64,7 @@ IF EXISTS (SELECT 1 FROM sys.tables WHERE name = 'Countries')
         await db.Database.EnsureDeletedAsync();
     }
 
-    [Benchmark(Description = "Update using native EFCore method")]
+    [Benchmark(Description = "Update using native EFCore methods")]
     public async Task ExecuteUpdate_ViaSelectAndUpdateAsync()
     {
         await using var db = new BenchmarkDbContext(_options);
@@ -80,7 +80,7 @@ IF EXISTS (SELECT 1 FROM sys.tables WHERE name = 'Countries')
         await db.SaveChangesAsync();
     }
 
-    [Benchmark(Description = "ExecuteUpdateJoinAsync using navigation properties in SET and WHERE")]
+    [Benchmark(Description = "ExecuteUpdateJoinAsync using navigation properties")]
     public async Task ExecuteUpdateJoinAsync_PublicExtensionAsync()
     {
         await using var db = new BenchmarkDbContext(_options);
@@ -93,7 +93,7 @@ IF EXISTS (SELECT 1 FROM sys.tables WHERE name = 'Countries')
                 builder.SetProperty(u => u.Region, u => u.State!.StateName));
     }
 
-    [Benchmark(Description = "ExecuteDeleteJoinAsync using navigation properties in WHERE")]
+    [Benchmark(Description = "Delete entities using Select and RemoveRange")]
     public async Task DeleteRow_EFCore_Async()
     {
         await using var db = new BenchmarkDbContext(_options);
@@ -109,7 +109,7 @@ IF EXISTS (SELECT 1 FROM sys.tables WHERE name = 'Countries')
         await db.SaveChangesAsync();
     }
 
-    [Benchmark(Description = "ExecuteDeleteJoinAsync using navigation properties in WHERE")]
+    [Benchmark(Description = "ExecuteDeleteJoinAsync using navigation properties")]
     public async Task ExecuteDeleteJoinAsync_PublicExtensionAsync()
     {
         await using var db = new BenchmarkDbContext(_options);
