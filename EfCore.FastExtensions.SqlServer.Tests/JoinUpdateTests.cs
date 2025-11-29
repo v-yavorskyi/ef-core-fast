@@ -122,9 +122,9 @@ public class JoinUpdateTests
             // assert
             var users = await db.Users.OrderBy(u => u.Id).ToListAsync();
 
-            Assert.Equal(1, affected);               // only first user
-            Assert.Equal("UPDATED", users[0].Region); // AB (Alabama)
-            Assert.Equal("Old2", users[1].Region);    // FL untouched
+            Assert.Equal(1, affected);                 // only first user
+            Assert.Equal("ALABAMA", users[0].Region);  // AB (Alabama)
+            Assert.Equal("Old2", users[1].Region);     // FL untouched
         }
         finally
         {
@@ -155,9 +155,9 @@ public class JoinUpdateTests
             // assert
             var users = await db.Users.OrderBy(u => u.Id).ToListAsync();
 
-            Assert.Equal(1, affected);               // only first user
-            Assert.Equal("UPDATED", users[0].Region); // AB (Alabama)
-            Assert.Equal("Old2", users[1].Region);    // FL untouched
+            Assert.Equal(1, affected);                 // only first user
+            Assert.Equal("ALABAMA", users[0].Region);  // AB (Alabama)
+            Assert.Equal("Old2", users[1].Region);     // FL untouched
         }
         finally
         {

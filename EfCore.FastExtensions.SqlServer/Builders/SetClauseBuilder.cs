@@ -249,9 +249,11 @@ internal static class SetClauseBuilder
             switch (mc.Method.Name)
             {
                 case nameof(string.ToUpper):
+                case nameof(string.ToUpperInvariant):
                     return $"UPPER({instanceSql})";
 
                 case nameof(string.ToLower):
+                case nameof(string.ToLowerInvariant):
                     return $"LOWER({instanceSql})";
 
                 case nameof(string.Trim):
@@ -273,6 +275,15 @@ internal static class SetClauseBuilder
                     // Substring(start) → SUBSTRING(col, start + 1, LEN(col) - start)
                     var s = TranslateExpression(mc.Arguments[0], root, db, parameters);
                     return $"SUBSTRING({instanceSql}, ({s}) + 1, LEN({instanceSql}) - ({s}))";
+
+                case nameof(string.StartsWith):
+                    return $"{instanceSql} LIKE {TranslateExpression(mc.Arguments[0], root, db, parameters)} + '%'";
+
+                case nameof(string.EndsWith):
+                    return $"{instanceSql} LIKE '%' + {TranslateExpression(mc.Arguments[0], root, db, parameters)}";
+
+                case nameof(string.Contains):
+                    return $"{instanceSql} LIKE '%' + {TranslateExpression(mc.Arguments[0], root, db, parameters)} + '%'";
             }
         }
 
