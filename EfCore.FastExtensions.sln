@@ -7,21 +7,27 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EfCore.FastExtensions.SqlSe
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EfCore.FastExtensions.SqlServer", "EfCore.FastExtensions.SqlServer\EfCore.FastExtensions.SqlServer.csproj", "{49FE07EA-0FDB-59C2-8FB8-F86A8F960CD5}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EfCore.FastExtensions.SqlServer.Benchmarks", "EfCore.FastExtensions.SqlServer.Benchmarks\EfCore.FastExtensions.SqlServer.Benchmarks.csproj", "{3A59FF69-CAC4-42FB-A0C5-8950D1D95EBD}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{876A51C0-C62D-18D3-7D7D-ADEEE67A5FEC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{876A51C0-C62D-18D3-7D7D-ADEEE67A5FEC}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{876A51C0-C62D-18D3-7D7D-ADEEE67A5FEC}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{876A51C0-C62D-18D3-7D7D-ADEEE67A5FEC}.Release|Any CPU.Build.0 = Release|Any CPU
-		{49FE07EA-0FDB-59C2-8FB8-F86A8F960CD5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{49FE07EA-0FDB-59C2-8FB8-F86A8F960CD5}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{49FE07EA-0FDB-59C2-8FB8-F86A8F960CD5}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{49FE07EA-0FDB-59C2-8FB8-F86A8F960CD5}.Release|Any CPU.Build.0 = Release|Any CPU
-	EndGlobalSection
+                {876A51C0-C62D-18D3-7D7D-ADEEE67A5FEC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+                {876A51C0-C62D-18D3-7D7D-ADEEE67A5FEC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+                {876A51C0-C62D-18D3-7D7D-ADEEE67A5FEC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+                {876A51C0-C62D-18D3-7D7D-ADEEE67A5FEC}.Release|Any CPU.Build.0 = Release|Any CPU
+                {49FE07EA-0FDB-59C2-8FB8-F86A8F960CD5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+                {49FE07EA-0FDB-59C2-8FB8-F86A8F960CD5}.Debug|Any CPU.Build.0 = Debug|Any CPU
+                {49FE07EA-0FDB-59C2-8FB8-F86A8F960CD5}.Release|Any CPU.ActiveCfg = Release|Any CPU
+                {49FE07EA-0FDB-59C2-8FB8-F86A8F960CD5}.Release|Any CPU.Build.0 = Release|Any CPU
+                {3A59FF69-CAC4-42FB-A0C5-8950D1D95EBD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+                {3A59FF69-CAC4-42FB-A0C5-8950D1D95EBD}.Debug|Any CPU.Build.0 = Debug|Any CPU
+                {3A59FF69-CAC4-42FB-A0C5-8950D1D95EBD}.Release|Any CPU.ActiveCfg = Release|Any CPU
+                {3A59FF69-CAC4-42FB-A0C5-8950D1D95EBD}.Release|Any CPU.Build.0 = Release|Any CPU
+        EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
