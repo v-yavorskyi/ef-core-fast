@@ -1,6 +1,7 @@
 # 🚀 EF.Core Extensions
 
 Write efficient `UPDATE` and `DELETE` queries using LINQ `Include()` chains that get translated into optimized SQL JOINs at execution time.
+Use this extension only when you have to update/delete an entity based on other entities.
 
 Extends Entity Framework Core with static IQueryable-level join-based execution for relational SQL databases.
 
@@ -40,8 +41,23 @@ var affected = await db.Users
     );
 ```
 
+## Benchmark: Native EF Core vs Fast Join Extensions
+
+Performance comparison between native CRUD operations and optimized `JOIN` extensions using navigation properties.
+
+| Method | Mean | Error | StdDev | Median | Allocated |
+|---|---:|---:|---:|---:|---:|
+| **Native EF Core Update** | 9.794 ms | 0.6103 ms | 1.800 ms | 9.753 ms | 475.92 KB |
+| **ExecuteUpdateJoinAsync (JOIN + SET + WHERE)** | 7.001 ms ✅ | 0.3860 ms | 1.120 ms | 6.552 ms | 149.49 KB ✅ |
+| **Native EF Core RemoveRange** | 20.866 ms ⚠ | 2.1838 ms | 6.370 ms | 18.531 ms | 3.31 MB ⚠ |
+| **ExecuteDeleteJoinAsync** | 11.131 ms ✅ | 0.4575 ms | 1.349 ms | 10.975 ms | 138.04 KB ✅ |
+
+---
+
 ## 🤝 Contributing
 - Fork the repository
 - Create a branch (feature/your-feature)
 - Commit your code
 - Push and open a Pull Request
+
+- 
