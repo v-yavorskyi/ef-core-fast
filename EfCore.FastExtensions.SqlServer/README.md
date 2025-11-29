@@ -20,7 +20,7 @@ Extends Entity Framework Core with static IQueryable-level join-based execution 
 ## 📦 Installation
 
 ```bash
-dotnet add package EfCore.JoinExtensions
+dotnet add package EfCore.FastExtensions.SqlServer
 ```
 
 ## Usage Examples
@@ -39,9 +39,3 @@ var affected = await db.Users
         x => x.SetProperty(p => p.Region, p => (p.State!.StateName.ToUpper()))
     );
 ```
-
-## 🤝 Contributing
-- Fork the repository
-- Create a branch (feature/your-feature)
-- Commit your code
-- Push and open a Pull Request
