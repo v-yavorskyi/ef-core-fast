@@ -7,10 +7,8 @@
     <IsPackable>false</IsPackable>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="BenchmarkDotNet" Version="0.13.12" />
+    <PackageReference Include="BenchmarkDotNet" Version="0.15.6" />
+    <PackageReference Include="EfCore.FastExtensions.SqlServer" Version="0.0.10" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.0" />
-  </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\EfCore.FastExtensions.SqlServer\EfCore.FastExtensions.SqlServer.csproj" />
   </ItemGroup>
 </Project>

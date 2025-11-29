@@ -33,13 +33,28 @@ public class JoinExtensionsBenchmarks
     }
 
     [IterationSetup]
-    public async Task IterationSetup()
+    public void IterationSetup()
     {
-        await using var db = new BenchmarkDbContext(_options);
+        using var db = new BenchmarkDbContext(_options);
 
         // reset data to keep each iteration consistent
-        await db.Database.ExecuteSqlRawAsync("DELETE FROM [Users]; DELETE FROM [States]; DELETE FROM [Countries];");
-        await SeedDataAsync(db);
+        DeleteIfExistsAsync(db).GetAwaiter().GetResult();
+        SeedDataAsync(db).GetAwaiter().GetResult();
+    }
+    private async Task DeleteIfExistsAsync(BenchmarkDbContext db)
+    {
+        var sql = @"
+IF EXISTS (SELECT 1 FROM sys.tables WHERE name = 'Users')
+    DELETE FROM [Users];
+
+IF EXISTS (SELECT 1 FROM sys.tables WHERE name = 'States')
+    DELETE FROM [States];
+
+IF EXISTS (SELECT 1 FROM sys.tables WHERE name = 'Countries')
+    DELETE FROM [Countries];
+";
+
+        await db.Database.ExecuteSqlRawAsync(sql);
     }
 
     [GlobalCleanup]
@@ -49,21 +64,53 @@ public class JoinExtensionsBenchmarks
         await db.Database.EnsureDeletedAsync();
     }
 
+    [Benchmark(Description = "Update using native EFCore method")]
+    public async Task ExecuteUpdate_ViaSelectAndUpdateAsync()
+    {
+        await using var db = new BenchmarkDbContext(_options);
+
+        var users = await db.Users
+            .Include(u => u.State)
+            .ThenInclude(s => s.Country)
+            .Where(u => u.State!.Country!.Code == "US" && u.State.StateCode == "S10")
+            .ToListAsync();
+
+        users.ForEach(u => u.Region = u.State!.StateName);
+
+        await db.SaveChangesAsync();
+    }
+
     [Benchmark(Description = "ExecuteUpdateJoinAsync using navigation properties in SET and WHERE")]
-    public async Task ExecuteUpdateJoinAsync_PublicExtension()
+    public async Task ExecuteUpdateJoinAsync_PublicExtensionAsync()
     {
         await using var db = new BenchmarkDbContext(_options);
 
         _ = await db.Users
             .Include(u => u.State)
             .ThenInclude(s => s.Country)
-            .Where(u => u.State!.Country!.Code == "US" && u.State.StateCode.StartsWith("S0"))
+            .Where(u => u.State!.Country!.Code == "US" && u.State.StateCode == "S10")
             .ExecuteUpdateJoinAsync(builder =>
-                builder.SetProperty(u => u.Region, u => u.State!.StateName.ToUpperInvariant()));
+                builder.SetProperty(u => u.Region, u => u.State!.StateName));
     }
 
     [Benchmark(Description = "ExecuteDeleteJoinAsync using navigation properties in WHERE")]
-    public async Task ExecuteDeleteJoinAsync_PublicExtension()
+    public async Task DeleteRow_EFCore_Async()
+    {
+        await using var db = new BenchmarkDbContext(_options);
+
+        var users = await db.Users
+            .Include(u => u.State)
+            .ThenInclude(s => s.Country)
+            .Where(u => u.State!.Country!.Name == "North America" && u.State.StateCode.StartsWith("S0"))
+            .ToListAsync();
+
+        db.Users.RemoveRange(users);
+
+        await db.SaveChangesAsync();
+    }
+
+    [Benchmark(Description = "ExecuteDeleteJoinAsync using navigation properties in WHERE")]
+    public async Task ExecuteDeleteJoinAsync_PublicExtensionAsync()
     {
         await using var db = new BenchmarkDbContext(_options);
 
