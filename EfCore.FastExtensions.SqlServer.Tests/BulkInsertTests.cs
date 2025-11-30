@@ -94,4 +94,21 @@ public class BulkInsertTests
         Assert.Equal("Generated", saved.Name);
         Assert.Equal("Central", saved.Region);
     }
+
+    [Fact]
+    public async Task ExecuteBulkInsertAsync_Splits_When_Parameter_Limit_Reached()
+    {
+        await using var db = CreateContext();
+
+        // SQLite enforces a parameter limit of 999; the extension should automatically split
+        // batches so that the generated commands stay under that threshold.
+        var entities = Enumerable.Range(1, 5000)
+            .Select(i => new BulkUser { Name = $"Name-{i}", Region = $"Region-{i}" })
+            .ToList();
+
+        var affected = await db.Users.AsQueryable().ExecuteBulkInsertAsync(entities, batchSize: 5000);
+
+        Assert.Equal(entities.Count, affected);
+        Assert.Equal(entities.Count, await db.Users.CountAsync());
+    }
 }

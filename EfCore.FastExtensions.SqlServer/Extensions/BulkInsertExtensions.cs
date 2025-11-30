@@ -7,11 +7,11 @@ namespace EfCore.FastExtensions.SqlServer.Extensions;
 
 public static class BulkInsertExtensions
 {
-
+    // should be re-written using  SqlBulkCopy ???
     public static async Task<int> ExecuteBulkInsertAsync<TEntity>(
         this IQueryable<TEntity> query,
         List<TEntity> entities,
-        int batchSize = 5000,
+        int batchSize = 500,
         CancellationToken cancellationToken = default)
     where TEntity : class
     {
