@@ -37,6 +37,14 @@ var affected = await db.Users
     .ExecuteUpdateJoinAsync(
         x => x.SetProperty(p => p.Region, p => p.State!.StateName.ToUpper())
     );
+
+var inserted = await db.Users
+    .AsQueryable()
+    .ExecuteBulkInsertAsync(new List<User>
+    {
+        new() { Name = "Alice", Region = "West" },
+        new() { Name = "Bob", Region = "East" }
+    }, batchSize: 5000);
 ```
 
 ### Bulk insert (SQL Server optimized)
