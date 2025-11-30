@@ -8,7 +8,6 @@ using System.Linq.Expressions;
 namespace EfCore.FastExtensions.SqlServer.Extensions;
 public static class JoinUpdateExtensions
 {
-
     public static async Task<int> ExecuteUpdateJoinAsync<TEntity>(
         this IQueryable<TEntity> query,
         Expression<Func<SetPropertyBuilder<TEntity>, SetPropertyBuilder<TEntity>>> updateExpression,
@@ -23,6 +22,15 @@ public static class JoinUpdateExtensions
         return await db.Database.ExecuteSqlRawAsync(sqlResult.Sql, sqlResult.Parameters, cancellationToken);
     }
 
+
+    public static async Task<int> ExecuteBulkUpdateAsync<TEntity, TDto>(
+        this IQueryableExtended<TEntity> query,
+        Func<(TEntity, TDto), object[]> mapValues,
+        CancellationToken cancellationToken = default)
+    where TEntity : class
+    {
+        throw new NotImplementedException();
+    }
 
     private static (string Sql, object[] Parameters) GetUpdateJoinSqlScript<TEntity>(
     this IQueryable<TEntity> query,
