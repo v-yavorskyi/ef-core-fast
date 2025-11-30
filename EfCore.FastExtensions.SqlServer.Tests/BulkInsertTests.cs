@@ -138,7 +138,7 @@ public class BulkInsertTests
             .Select(i => new BulkUser { Name = $"Name-{i}", Region = $"Region-{i}" })
             .ToList();
 
-        var affected = await db.Users.AsQueryable().ExecuteBulkInsertAsync(entities, batchSize: 5000);
+        var affected = await db.Users.ExecuteBulkInsertAsync(entities, batchSize: 5000);
 
         Assert.Equal(entities.Count, affected);
         Assert.Equal(entities.Count, await db.Users.CountAsync());

@@ -24,7 +24,7 @@ public static class JoinUpdateExtensions
 
 
     public static async Task<int> ExecuteBulkUpdateAsync<TEntity, TDto>(
-        this IQueryableExtended<TEntity> query,
+        this IQueryable<TEntity> query,
         Func<(TEntity, TDto), object[]> mapValues,
         CancellationToken cancellationToken = default)
     where TEntity : class
