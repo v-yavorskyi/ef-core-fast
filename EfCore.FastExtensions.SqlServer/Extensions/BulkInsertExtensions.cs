@@ -1,17 +1,19 @@
 using EfCore.FastExtensions.SqlServer.Accessors;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
+using System.Data;
 using System.Text;
 
 namespace EfCore.FastExtensions.SqlServer.Extensions;
 
 public static class BulkInsertExtensions
 {
-    // should be re-written using  SqlBulkCopy ???
+
     public static async Task<int> ExecuteBulkInsertAsync<TEntity>(
         this IQueryable<TEntity> query,
         List<TEntity> entities,
-        int batchSize = 500,
+        int batchSize = 5000,
         CancellationToken cancellationToken = default)
     where TEntity : class
     {
@@ -19,26 +21,6 @@ public static class BulkInsertExtensions
             return 0;
 
         var db = DbContextAccessor.GetDbContextFromQuery(query);
-        var sqlBatches = GetInsertSqlScripts(query, entities, batchSize, db);
-
-        var affected = 0;
-        foreach (var sqlResult in sqlBatches)
-        {
-            affected += await db.Database.ExecuteSqlRawAsync(sqlResult.Sql, sqlResult.Parameters, cancellationToken);
-        }
-
-        // OPTIONAL: include parameters later if needed
-        // Here it's pure SQL execution
-        return affected;
-    }
-        
-    private static IReadOnlyList<(string Sql, object[] Parameters)> GetInsertSqlScripts<TEntity>(
-        this IQueryable<TEntity> query,
-        IEnumerable<TEntity> entities,
-        int batchSize,
-        DbContext db)
-    where TEntity : class
-    {
         var entityType = db.Model.FindEntityType(typeof(TEntity))
                          ?? throw new InvalidOperationException(
                              $"Entity type {typeof(TEntity).Name} is not part of the DbContext model.");
@@ -48,19 +30,50 @@ public static class BulkInsertExtensions
                             $"Entity type {entityType.DisplayName()} is not mapped to a table.");
 
         var schema = entityType.GetSchema();
-        var fullTableName = string.IsNullOrWhiteSpace(schema)
-            ? tableName
-            : $"{schema}.{tableName}";
 
-        var properties = entityType.GetProperties()
+        var insertableProperties = entityType.GetProperties()
             .Where(p => p.ValueGenerated != ValueGenerated.OnAdd &&
                         p.ValueGenerated != ValueGenerated.OnAddOrUpdate)
             .ToList();
 
-        if (properties.Count == 0)
+        if (insertableProperties.Count == 0)
             throw new InvalidOperationException("No insertable properties were found for the entity type.");
 
-        var columnList = string.Join(", ", properties.Select(p => p.GetColumnName()));
+        if (db.Database.ProviderName == "Microsoft.EntityFrameworkCore.SqlServer"
+            && db.Database.GetDbConnection() is SqlConnection sqlConnection)
+        {
+            return await ExecuteSqlBulkCopyAsync(sqlConnection, schema, tableName, insertableProperties, entities, cancellationToken);
+        }
+
+        var sqlBatches = GetInsertSqlScripts(query, entities, batchSize, db, entityType, schema, tableName, insertableProperties);
+
+        var affected = 0;
+        foreach (var sqlResult in sqlBatches)
+        {
+            affected += await db.Database.ExecuteSqlRawAsync(sqlResult.Sql, sqlResult.Parameters, cancellationToken);
+        }
+
+        return affected;
+    }
+
+    private static IReadOnlyList<(string Sql, object[] Parameters)> GetInsertSqlScripts<TEntity>(
+        this IQueryable<TEntity> query,
+        IEnumerable<TEntity> entities,
+        int batchSize,
+        DbContext db,
+        IEntityType entityType,
+        string? schema,
+        string tableName,
+        IReadOnlyList<IProperty> properties)
+    where TEntity : class
+    {
+        var fullTableName = string.IsNullOrWhiteSpace(schema)
+            ? tableName
+            : $"{schema}.{tableName}";
+
+        var storeObject = StoreObjectIdentifier.Table(tableName, schema);
+        var columnList = string.Join(", ", properties.Select(p => p.GetColumnName(storeObject)
+            ?? throw new InvalidOperationException($"Column mapping not found for property {p.Name}.")));
 
         var batches = new List<(string Sql, object[] Parameters)>();
         var commandBatch = new List<string>(batchSize);
@@ -75,7 +88,7 @@ public static class BulkInsertExtensions
 
             foreach (var property in properties)
             {
-                var value = property.PropertyInfo?.GetValue(entity);
+                var value = GetPropertyValue(property, entity);
                 placeholders.Add(parameters.Add(value));
             }
 
@@ -95,6 +108,88 @@ public static class BulkInsertExtensions
         }
 
         return batches;
+    }
+
+    private static object? GetPropertyValue<TEntity>(IProperty property, TEntity entity)
+        where TEntity : class
+    {
+        if (property.PropertyInfo != null)
+        {
+            return property.PropertyInfo.GetValue(entity);
+        }
+
+        var getter = property.GetGetter();
+        return getter?.GetClrValue(entity);
+    }
+
+    private static async Task<int> ExecuteSqlBulkCopyAsync<TEntity>(
+        SqlConnection connection,
+        string? schema,
+        string tableName,
+        IReadOnlyList<IProperty> properties,
+        IEnumerable<TEntity> entities,
+        CancellationToken cancellationToken)
+        where TEntity : class
+    {
+        var storeObject = StoreObjectIdentifier.Table(tableName, schema);
+        var fullTableName = string.IsNullOrWhiteSpace(schema)
+            ? tableName
+            : $"{schema}.{tableName}";
+
+        var wasClosed = connection.State == ConnectionState.Closed;
+
+        using var dataTable = new DataTable();
+
+        foreach (var property in properties)
+        {
+            var targetType = Nullable.GetUnderlyingType(property.ClrType) ?? property.ClrType;
+            dataTable.Columns.Add(property.Name, targetType);
+        }
+
+        foreach (var entity in entities)
+        {
+            var values = properties
+                .Select(property => GetPropertyValue(property, entity) ?? DBNull.Value)
+                .ToArray();
+            dataTable.Rows.Add(values);
+        }
+
+        if (dataTable.Rows.Count == 0)
+        {
+            return 0;
+        }
+
+        if (wasClosed)
+        {
+            await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        try
+        {
+            using var bulkCopy = new SqlBulkCopy(connection, SqlBulkCopyOptions.CheckConstraints, null)
+            {
+                DestinationTableName = fullTableName,
+                EnableStreaming = true
+            };
+
+            foreach (var property in properties)
+            {
+                var columnName = property.GetColumnName(storeObject)
+                                 ?? throw new InvalidOperationException(
+                                     $"Column mapping not found for property {property.Name}.");
+                bulkCopy.ColumnMappings.Add(property.Name, columnName);
+            }
+
+            await bulkCopy.WriteToServerAsync(dataTable, cancellationToken).ConfigureAwait(false);
+            return dataTable.Rows.Count;
+        }
+        finally
+        {
+            if (wasClosed)
+            {
+                await connection.CloseAsync().ConfigureAwait(false);
+            }
+        }
     }
 
     private static (string Sql, object[] Parameters) BuildInsertCommand(
@@ -121,5 +216,4 @@ public static class BulkInsertExtensions
             _ => 2000
         };
     }
-
 }

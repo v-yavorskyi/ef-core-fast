@@ -1,4 +1,5 @@
 ﻿using EfCore.FastExtensions.SqlServer.Extensions;
+using EfCore.FastExtensions.SqlServer.Tests.Configs;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
@@ -27,7 +28,7 @@ public class BulkInsertTests
         public string Region { get; set; } = string.Empty;
     }
 
-    private static BulkInsertDbContext CreateContext()
+    private static BulkInsertDbContext CreateSqlLiteContext()
     {
         var connection = new SqliteConnection("DataSource=:memory:");
         connection.Open();
@@ -41,11 +42,25 @@ public class BulkInsertTests
 
         return context;
     }
+    private static BulkInsertDbContext CreateSqlServerContext()
+    {
+        var connectionString = DbConfig.GetSqlServerConnectionString() ?? throw new KeyNotFoundException("Connection string not found.");
+
+        var options = new DbContextOptionsBuilder<BulkInsertDbContext>()
+            // put your local connection string here:
+            .UseSqlServer(connectionString)
+            .EnableSensitiveDataLogging()
+            .Options;
+
+        var db = new BulkInsertDbContext(options);
+        db.Database.EnsureCreated();
+        return db;
+    }
 
     [Fact]
     public async Task ExecuteBulkInsertAsync_Inserts_All_Entities_Across_Batches()
     {
-        await using var db = CreateContext();
+        await using var db = CreateSqlLiteContext();
 
         var entities = new List<BulkUser>
         {
@@ -69,7 +84,7 @@ public class BulkInsertTests
     [Fact]
     public async Task ExecuteBulkInsertAsync_Returns_Zero_For_Empty_Input()
     {
-        await using var db = CreateContext();
+        await using var db = CreateSqlLiteContext();
 
         var affected = await db.Users.AsQueryable().ExecuteBulkInsertAsync(new List<BulkUser>());
 
@@ -80,7 +95,7 @@ public class BulkInsertTests
     [Fact]
     public async Task ExecuteBulkInsertAsync_Skips_StoreGenerated_Property()
     {
-        await using var db = CreateContext();
+        await using var db = CreateSqlLiteContext();
 
         var entity = new BulkUser { Name = "Generated", Region = "Central" };
 
@@ -98,7 +113,24 @@ public class BulkInsertTests
     [Fact]
     public async Task ExecuteBulkInsertAsync_Splits_When_Parameter_Limit_Reached()
     {
-        await using var db = CreateContext();
+        await using var db = CreateSqlLiteContext();
+
+        // SQLite enforces a parameter limit of 999; the extension should automatically split
+        // batches so that the generated commands stay under that threshold.
+        var entities = Enumerable.Range(1, 5000)
+            .Select(i => new BulkUser { Name = $"Name-{i}", Region = $"Region-{i}" })
+            .ToList();
+
+        var affected = await db.Users.AsQueryable().ExecuteBulkInsertAsync(entities, batchSize: 5000);
+
+        Assert.Equal(entities.Count, affected);
+        Assert.Equal(entities.Count, await db.Users.CountAsync());
+    }
+
+    [Fact]
+    public async Task ExecuteBulkInsertAsync_SqlServer()
+    {
+        await using var db = CreateSqlServerContext();
 
         // SQLite enforces a parameter limit of 999; the extension should automatically split
         // batches so that the generated commands stay under that threshold.
