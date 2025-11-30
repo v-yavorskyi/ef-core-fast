@@ -9,6 +9,7 @@ using System.Linq.Expressions;
 using System.Data;
 using System.Threading;
 using System.Threading.Tasks;
+using EfCore.FastExtensions.SqlServer.Enums;
 
 namespace EfCore.FastExtensions.SqlServer.Extensions;
 
@@ -30,7 +31,8 @@ public static class IncludeTempTableExtensions
         this IQueryable<TEntity> query,
         Expression<Func<TEntity, TKey>> entityKeySelector,
         IEnumerable<TDto> tempDtos,
-        Func<TDto, TKey> dtoKeySelector
+        Func<TDto, TKey> dtoKeySelector,
+        SqlJoinType joinType = SqlJoinType.Inner
     ) where TEntity : class
     {
         ArgumentNullException.ThrowIfNull(query);
@@ -40,20 +42,10 @@ public static class IncludeTempTableExtensions
 
         if (query is IQueryable<TEntity> extended)
         {
-            return new TempTableQuery<TEntity, TDto, TKey>(extended, entityKeySelector, tempDtos, dtoKeySelector);
+            return new TempTableQuery<TEntity, TDto, TKey>(extended, entityKeySelector, tempDtos, dtoKeySelector, joinType);
         }
 
-        return new TempTableQuery<TEntity, TDto, TKey>(new WrappingExtendedQueryable<TEntity>(query), entityKeySelector, tempDtos, dtoKeySelector);
-    }
-
-    public static Task<List<TResult>> ExecuteSelectAsync<TEntity, TDto, TKey, TResult>(
-        this ITempTableQueryable<TEntity, TDto, TKey> query,
-        Expression<Func<TEntity, TResult>> selector,
-        Func<IQueryable<TDto>, IQueryable<TDto>> tempTableSelector,
-        CancellationToken cancellationToken = default)
-        where TEntity : class
-    {
-        return ExecuteSelectAsync(query, selector, tempTableSelector, static (projection, _) => projection, cancellationToken);
+        return new TempTableQuery<TEntity, TDto, TKey>(new WrappingExtendedQueryable<TEntity>(query), entityKeySelector, tempDtos, dtoKeySelector, joinType);
     }
 
     public static Task<List<TResult>> ExecuteSelectAsync<TEntity, TDto, TKey, TResult>(
@@ -62,17 +54,7 @@ public static class IncludeTempTableExtensions
         CancellationToken cancellationToken = default)
         where TEntity : class
     {
-        return ExecuteSelectAsync(query, selector, static temp => temp, static (projection, _) => projection, cancellationToken);
-    }
-
-    public static Task<List<TResult>> ExecuteSelectAsync<TEntity, TDto, TKey, TResult>(
-        this ITempTableQueryable<TEntity, TDto, TKey> query,
-        Func<IQueryable<TDto>, IQueryable<TDto>> tempTableSelector,
-        Func<TEntity, TDto, TResult> resultSelector,
-        CancellationToken cancellationToken = default)
-        where TEntity : class
-    {
-        return ExecuteSelectAsync(query, static entity => entity, tempTableSelector, resultSelector, cancellationToken);
+        return ExecuteSelectAsync(query, selector, static (projection, _) => projection, cancellationToken);
     }
 
     public static Task<List<TResult>> ExecuteSelectAsync<TEntity, TDto, TKey, TResult>(
@@ -81,7 +63,7 @@ public static class IncludeTempTableExtensions
         CancellationToken cancellationToken = default)
         where TEntity : class
     {
-        return ExecuteSelectAsync(query, static entity => entity, static temp => temp, resultSelector, cancellationToken);
+        return ExecuteSelectAsync(query, static entity => entity, resultSelector, cancellationToken);
     }
 
     public static Task<List<TResult>> ExecuteSelectAsync<TEntity, TDto, TKey, TProjection, TResult>(
@@ -90,9 +72,6 @@ public static class IncludeTempTableExtensions
         // user LINQ projection
         Expression<Func<TEntity, TProjection>> selector,
 
-        // temp table alias access object
-        Func<IQueryable<TDto>, IQueryable<TDto>> tempTableSelector,
-
         // final result projection that has access to both entity projection and temp dto
         Func<TProjection, TDto, TResult> resultSelector,
         CancellationToken cancellationToken = default)
@@ -100,12 +79,11 @@ public static class IncludeTempTableExtensions
     {
         ArgumentNullException.ThrowIfNull(query);
         ArgumentNullException.ThrowIfNull(selector);
-        ArgumentNullException.ThrowIfNull(tempTableSelector);
         ArgumentNullException.ThrowIfNull(resultSelector);
 
         var db = DbContextAccessor.GetDbContextFromQuery(query.InnerQuery);
 
-        var filteredTempDtos = tempTableSelector(query.TempDtos.AsQueryable()).ToList();
+        var filteredTempDtos = query.TempDtos.ToList();
 
         if (filteredTempDtos.Count == 0)
         {
@@ -176,8 +154,9 @@ public static class IncludeTempTableExtensions
             var fullTableName = string.IsNullOrWhiteSpace(entityType.GetSchema())
                 ? $"[{entityType.GetTableName()}]"
                 : $"[{entityType.GetSchema()}].[{entityType.GetTableName()}]";
+            var joinOperator = tempQuery.JoinType == SqlJoinType.Left ? "LEFT" : "INNER";
+            var joinSql = $"SELECT DISTINCT e.[{entityKeyColumn}] FROM {fullTableName} AS e {joinOperator} JOIN {tempTableName} AS t ON e.[{entityKeyColumn}] = t.[{keyColumnName}]";
 
-            var joinSql = $"SELECT DISTINCT e.[{entityKeyColumn}] FROM {fullTableName} AS e INNER JOIN {tempTableName} AS t ON e.[{entityKeyColumn}] = t.[{keyColumnName}]";
             var matchedKeys = new List<TKey>();
 
             await using (var joinCommand = new SqlCommand(joinSql, connection))
@@ -189,30 +168,42 @@ public static class IncludeTempTableExtensions
                 }
             }
 
-            if (matchedKeys.Count == 0)
+            if (tempQuery.JoinType == SqlJoinType.Inner && matchedKeys.Count == 0)
             {
                 return new List<TResult>();
             }
 
-            var predicate = BuildContainsPredicate(tempQuery.EntityKeySelector, matchedKeys);
-            var selectedEntities = await tempQuery.InnerQuery.Where(predicate).ToListAsync(cancellationToken);
+            var selectedEntities = tempQuery.JoinType == SqlJoinType.Inner
+                ? await tempQuery.InnerQuery.Where(BuildContainsPredicate(tempQuery.EntityKeySelector, matchedKeys)).ToListAsync(cancellationToken)
+                : await tempQuery.InnerQuery.ToListAsync(cancellationToken);
+
 
             var selectorFunc = selector.Compile();
             var dtoLookup = filteredTempDtos.ToLookup(tempQuery.DtoKeySelector);
             var entityKeyFunc = tempQuery.EntityKeySelector.Compile();
 
-            var averageMatchesPerKey = filteredTempDtos.Count / Math.Max(1, matchedKeys.Count);
+            var keyCountForAverage = tempQuery.JoinType == SqlJoinType.Inner ? Math.Max(1, matchedKeys.Count) : Math.Max(1, selectedEntities.Count);
+            var averageMatchesPerKey = filteredTempDtos.Count / keyCountForAverage;
             var results = new List<TResult>(selectedEntities.Count * Math.Max(1, averageMatchesPerKey));
 
             foreach (var entity in selectedEntities)
             {
                 var key = entityKeyFunc(entity);
                 var projection = selectorFunc(entity);
-                foreach (var dto in dtoLookup[key])
+                var dtoMatches = dtoLookup[key];
+                var hasMatches = false;
+                foreach (var dto in dtoMatches)
                 {
+                    hasMatches = true;
                     results.Add(resultSelector(projection, dto));
                 }
+
+                if (!hasMatches && tempQuery.JoinType == SqlJoinType.Left)
+                {
+                    results.Add(resultSelector(projection, default!));
+                }
             }
+
 
             return results;
         }
@@ -288,21 +279,24 @@ public static class IncludeTempTableExtensions
 internal sealed class TempTableQuery<TEntity, TDto, TKey> : ITempTableQueryable<TEntity, TDto, TKey>
 {
     public TempTableQuery(
-        IQueryable<TEntity> innerQuery,
+        IQueryable<TEntity> joinQuery,
         Expression<Func<TEntity, TKey>> entityKeySelector,
         IEnumerable<TDto> tempDtos,
-        Func<TDto, TKey> dtoKeySelector)
+        Func<TDto, TKey> dtoKeySelector,
+        SqlJoinType joinType)
     {
-        InnerQuery = innerQuery ?? throw new ArgumentNullException(nameof(innerQuery));
+        InnerQuery = joinQuery ?? throw new ArgumentNullException(nameof(joinQuery));
         EntityKeySelector = entityKeySelector ?? throw new ArgumentNullException(nameof(entityKeySelector));
         TempDtos = tempDtos ?? throw new ArgumentNullException(nameof(tempDtos));
         DtoKeySelector = dtoKeySelector ?? throw new ArgumentNullException(nameof(dtoKeySelector));
+        JoinType = joinType;
     }
 
     public IQueryable<TEntity> InnerQuery { get; }
     public Expression<Func<TEntity, TKey>> EntityKeySelector { get; }
     public IEnumerable<TDto> TempDtos { get; }
     public Func<TDto, TKey> DtoKeySelector { get; }
+    public SqlJoinType JoinType { get; }
 
     public Type ElementType => InnerQuery.ElementType;
     public Expression Expression => InnerQuery.Expression;

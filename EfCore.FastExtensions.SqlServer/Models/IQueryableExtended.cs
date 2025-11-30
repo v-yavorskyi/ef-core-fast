@@ -1,4 +1,5 @@
-﻿using System;
+﻿using EfCore.FastExtensions.SqlServer.Enums;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq.Expressions;
@@ -15,4 +16,6 @@ public interface ITempTableQueryable<TEntity, TDto, TKey> : IQueryable<TEntity>
     IEnumerable<TDto> TempDtos { get; }
 
     Func<TDto, TKey> DtoKeySelector { get; }
+
+    SqlJoinType JoinType { get; }
 }
