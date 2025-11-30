@@ -1,4 +1,5 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using EfCore.FastExtensions.SqlServer.Enums;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
 using System;
 using System.Collections.Generic;
@@ -6,11 +7,7 @@ using System.Text;
 
 namespace EfCore.FastExtensions.SqlServer.Models;
 
-internal enum SqlJoinType
-{
-    Inner,
-    Left
-}
+
 internal sealed class JoinNode
 {
     private readonly List<JoinNode> _children = new();

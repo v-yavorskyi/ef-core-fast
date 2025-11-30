@@ -1,4 +1,5 @@
-﻿using EfCore.FastExtensions.SqlServer.Models;
+﻿using EfCore.FastExtensions.SqlServer.Enums;
+using EfCore.FastExtensions.SqlServer.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
 using System.Linq.Expressions;
