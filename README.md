@@ -11,6 +11,7 @@ Extends Entity Framework Core with static IQueryable-level join-based execution 
 
 - ✅ `ExecuteUpdateJoinAsync(...)` — run update queries using translated SQL JOIN
 - ✅ `ExecuteDeleteJoinAsync(...)` — delete entities using join-based filters
+- ✅ `ExecuteBulkInsertAsync(...)` — efficiently insert large batches without manual SQL
 - ✅ No raw SQL required
 - ✅ Fully composable `IQueryable` experience
 - ✅ Async execution support
@@ -39,6 +40,14 @@ var affected = await db.Users
     .ExecuteUpdateJoinAsync(
         x => x.SetProperty(p => p.Region, p => (p.State!.StateName.ToUpper()))
     );
+
+var inserted = await db.Users
+    .AsQueryable()
+    .ExecuteBulkInsertAsync(new List<User>
+    {
+        new() { Name = "Alice", Region = "West" },
+        new() { Name = "Bob", Region = "East" }
+    }, batchSize: 5000);
 ```
 
 ## Benchmark: Native EF Core vs Fast Join Extensions
